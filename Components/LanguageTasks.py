@@ -25,32 +25,36 @@ system_instruction = (
 
 # Function to extract start and end times from JSON response
 def extract_times(json_string):
+    for i, line in enumerate(json_string.split("\n")):
+        print(i, " ", line)
     json_string = json_string.replace('```json', '').replace('```', '').strip()
     json_string=json_string[:json_string.rindex('}')+1]+']'  # Ensure valid JSON format
-    # for i, line in enumerate(json_string.split("\n")):
-    #     print(i, " ", line)
+    for i, line in enumerate(json_string.split("\n")):
+        print(i, " ", line)
     clips = json.loads(json_string)  # Parse JSON
     return clips
 # Function to get highlights using Gemini Chat API
 def GetHighlight(user_input, trans_clips):
     print("Getting Highlights from Transcription...")
     model = "gemini-2.0-flash"
-    
+    config=types.GenerateContentConfig(
+            temperature=0.6,
+            top_p=0.8,
+            system_instruction=system_instruction)
     # Convert trans_clips to a string for input
     transcription = "\n".join([f"{start} - {end}: {text}" for text, start, end in trans_clips])
     
     # Start a chat session
-    chat = client.chats.create(model=model,config=types.GenerateContentConfig(
-            temperature=0.6,
-            top_p=0.8,
-            system_instruction=system_instruction))
+    initial_prompt = f"{user_input}\n\ntranscript:\n{transcription}"
+    response = client.models.generate_content(
+        model=model,
+        config=config,
+        contents=[initial_prompt],
+    )
     
     # Initial message
-    initial_prompt = f"{user_input}\n\ntranscript:\n{transcription}"
+   
     # print(initial_prompt)
-    response = chat.send_message(
-        initial_prompt
-    )
     # for message in chat.get_history():
     #     print(f'role - {message.role}',end=": ")
     #     print(message.parts[0].text)
@@ -66,9 +70,12 @@ def GetHighlight(user_input, trans_clips):
     while not json_string.strip().endswith('```'):  # Likely truncated
         print("Response truncated, continuing...")
         last_end = all_clips[-1]["end"] if all_clips else "0.0"  # Last clip’s end time
-        response = chat.send_message(
-            f"Continue extracting clips starting after the clip ending at {last_end}.",
-        )
+        prompt=f"Continue extracting clips starting after the clip ending at {last_end}. \n\ntranscript:\n{transcription}"
+        response = client.models.generate_content(
+        model=model,
+        config=config,
+        contents=[prompt],
+    )
         # for message in chat.get_history():
         #     print(f'role - {message.role}',end=": ")
         #     print(message.parts[0].text)
